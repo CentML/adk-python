@@ -85,6 +85,7 @@ class LiteLLMClient:
       The model response as a message.
     """
 
+    print("[DEBUG] Model input message ", messages)
     return await acompletion(
         model=model,
         messages=messages,
@@ -187,6 +188,8 @@ def _content_to_message_param(
             content_present = True
 
     final_content = message_content if content_present else None
+
+    print("[DEBUG] agent tool calls ", tool_calls)
 
     return ChatCompletionAssistantMessage(
         role=role,
