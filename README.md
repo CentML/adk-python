@@ -41,7 +41,12 @@ Agent Development Kit (ADK) is a flexible and modular framework for developing a
 
 ## 🚀 Installation
 
-### Stable Release (Recommended)
+### Install from local source
+```bash
+pip install -e .
+```
+
+### Stable Release 
 
 You can install the latest stable version of ADK using `pip`:
 
