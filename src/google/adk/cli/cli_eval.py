@@ -154,6 +154,7 @@ def run_evals(
     session_service=None,
     artifact_service=None,
     print_detailed_results=False,
+    save_trace: Optional[str] = None,
 ) -> Generator[EvalResult, None, None]:
   try:
     from ..evaluation.agent_evaluator import EvaluationGenerator
@@ -163,6 +164,8 @@ def run_evals(
     raise ModuleNotFoundError(MISSING_EVAL_DEPENDENCIES_MESSAGE) from e
 
   """Returns a summary of eval runs."""
+  trace_data = {}
+  
   for eval_set_file, evals_to_run in eval_set_to_evals.items():
     with open(eval_set_file, "r", encoding="utf-8") as file:
       eval_items = json.load(file)  # Load JSON into a list
@@ -191,13 +194,28 @@ def run_evals(
             artifact_service=artifact_service,
         )
 
+        # Initialize trace data for this eval
+        eval_key = f"{eval_set_file}:{eval_name}"
+        trace_data[eval_key] = {
+            "trajectory": scrape_result,
+            "failures": None
+        }
+
+        if not save_trace:
+            print(f"\n======= Scrape Result for {eval_name} =======")
+            print(json.dumps(scrape_result, indent=2))
+            print("===========================================\n")
+
         eval_metric_results = []
         for eval_metric in eval_metrics:
           eval_metric_result = None
           if eval_metric.metric_name == TOOL_TRAJECTORY_SCORE_KEY:
-            score = TrajectoryEvaluator.evaluate(
-                [scrape_result], print_detailed_results=print_detailed_results
+            score, failures = TrajectoryEvaluator.evaluate(
+                [scrape_result], 
+                print_detailed_results=print_detailed_results,
             )
+            if failures:
+              trace_data[eval_key]["failures"] = failures
             eval_metric_result = _get_eval_metric_result(eval_metric, score)
           elif eval_metric.metric_name == RESPONSE_MATCH_SCORE_KEY:
             score = ResponseEvaluator.evaluate(
@@ -265,6 +283,13 @@ def run_evals(
       except Exception as e:
         print(f"Error: {e}")
         logger.info("Error: %s", str(traceback.format_exc()))
+
+  # Save trace data to file if save_trace is provided
+  if save_trace:
+    print(f"Saving trace data to {save_trace}")
+    with open(save_trace, "w", encoding="utf-8") as f:
+      json.dump(trace_data, f, indent=2)
+    print(f"\nTrace data has been saved to: {save_trace}\n")
 
 
 def _get_eval_metric_result(eval_metric, score):

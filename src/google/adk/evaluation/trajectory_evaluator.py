@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Any
+from typing import Any, Optional
+import json
 
 import pandas as pd
 from tabulate import tabulate
@@ -28,8 +29,8 @@ class TrajectoryEvaluator:
       eval_dataset: list[list[dict[str, Any]]],
       *,
       print_detailed_results: bool = False,
-  ):
-    r"""Returns the mean tool use accuracy of the eval dataset.
+  ) -> tuple[float, list[dict[str, Any]]]:
+    r"""Returns the mean tool use accuracy of the eval dataset and any failures.
 
     Tool use accuracy is calculated by comparing the expected and the actual
     tool use trajectories. An exact match scores a 1, 0 otherwise. The final
@@ -42,6 +43,11 @@ class TrajectoryEvaluator:
       eval_dataset: The dataset that will be evaluated.
       print_detailed_results: Prints detailed results on the console. This is
         usually helpful during debugging.
+
+    Returns:
+      A tuple containing:
+        - The mean tool use accuracy score
+        - A list of failures, if any occurred
 
     A note on eval_dataset:
       The dataset should be a list session, where each session is represented
@@ -109,7 +115,7 @@ class TrajectoryEvaluator:
     if print_detailed_results:
       TrajectoryEvaluator._print_results(results_df)
 
-    return results_df["tool_use_accuracy"].mean()
+    return results_df["tool_use_accuracy"].mean(), failures
 
   @staticmethod
   def _evaluate_row(row):
@@ -118,9 +124,11 @@ class TrajectoryEvaluator:
         row["expected_tool_use"]
     )
     actual = row["actual_tool_use"]
+    print("before are_tools_equal")
     tool_use_accuracy = (
         1.0 if TrajectoryEvaluator.are_tools_equal(actual, expected) else 0.0
     )
+    print("after are_tools_equal")
 
     new_row = {
         "query": row["query"],
@@ -139,17 +147,50 @@ class TrajectoryEvaluator:
   @staticmethod
   def are_tools_equal(list_a_original, list_b_original):
     # Remove other entries that we don't want to evaluate
-    list_a = [
-        {"tool_name": tool["tool_name"], "tool_input": tool["tool_input"]}
-        for tool in list_a_original
-    ]
+    list_a = []
+    for tool in list_a_original:
+      tool_name = tool["tool_name"]
+      if len(tool_name) > 60:
+        print(f"INFO: Truncating tool name '{tool_name}' to 60 characters")
+        tool_name = tool_name[:60]
+      list_a.append({
+          "tool_name": tool_name,
+          "tool_input": tool["tool_input"]
+      })
 
-    list_b = [
-        {"tool_name": tool["tool_name"], "tool_input": tool["tool_input"]}
-        for tool in list_b_original
-    ]
+    list_b = []
+    for tool in list_b_original:
+      tool_name = tool["tool_name"]
+      if len(tool_name) > 60:
+        print(f"INFO: Truncating tool name '{tool_name}' to 60 characters")
+        tool_name = tool_name[:60]
+      list_b.append({
+          "tool_name": tool_name,
+          "tool_input": tool["tool_input"]
+      })
 
-    return list_a == list_b
+    if len(list_a) != len(list_b):
+      print(f"Tool lists have different lengths: actual={len(list_a)}, expected={len(list_b)}")
+      return False
+
+    for i, (tool_a, tool_b) in enumerate(zip(list_a, list_b)):
+      if tool_a["tool_name"] != tool_b["tool_name"]:
+        return False
+      
+      # Compare tool inputs, handling "dont_care" values
+      input_a = tool_a["tool_input"]
+      input_b = tool_b["tool_input"]
+      
+      if input_a.keys() != input_b.keys():
+        return False
+        
+      for key in input_a:
+        if input_b[key] == "dont_care":
+          continue  # Skip comparison for "dont_care" values
+        if input_a[key] != input_b[key]:
+          return False
+
+    return True
 
   @staticmethod
   def _remove_tool_outputs(tool_use_list):

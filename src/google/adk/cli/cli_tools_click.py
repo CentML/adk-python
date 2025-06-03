@@ -199,11 +199,17 @@ def cli_run(
     default=False,
     help="Optional. Whether to print detailed results on console or not.",
 )
+@click.option(
+    "--save_trace",
+    type=str,
+    help="Optional. If provided, saves the scrape results to the specified file instead of printing them.",
+)
 def cli_eval(
     agent_module_file_path: str,
     eval_set_file_path: tuple[str],
     config_file_path: str,
     print_detailed_results: bool,
+    save_trace: Optional[str],
 ):
   """Evaluates an agent given the eval sets.
 
@@ -264,6 +270,7 @@ def cli_eval(
             reset_func,
             eval_metrics,
             print_detailed_results=print_detailed_results,
+            save_trace=save_trace,
         )
     )
   except ModuleNotFoundError:
