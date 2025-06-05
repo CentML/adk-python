@@ -165,7 +165,7 @@ def run_evals(
 
   """Returns a summary of eval runs."""
   trace_data = {}
-  
+
   for eval_set_file, evals_to_run in eval_set_to_evals.items():
     with open(eval_set_file, "r", encoding="utf-8") as file:
       eval_items = json.load(file)  # Load JSON into a list
@@ -286,10 +286,20 @@ def run_evals(
 
   # Save trace data to file if save_trace is provided
   if save_trace:
-    print(f"Saving trace data to {save_trace}")
+    # Create new dict with only query and event_history
+    event_history_data = {}
+    for eval_set, eval_data in trace_data.items():
+      event_history_data[eval_set] = {
+          'trajectory': [{
+              'query': turn['query'],
+              'event_history': turn['event_history']
+          } for turn in eval_data['trajectory']],
+      }
+
+    print(f"Saving event history data to {save_trace}")
     with open(save_trace, "w", encoding="utf-8") as f:
-      json.dump(trace_data, f, indent=2)
-    print(f"\nTrace data has been saved to: {save_trace}\n")
+      json.dump(event_history_data, f, indent=2)
+    print(f"\nEvent history data has been saved to: {save_trace}\n")
 
 
 def _get_eval_metric_result(eval_metric, score):

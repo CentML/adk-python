@@ -170,22 +170,60 @@ class EvaluationGenerator:
       query = eval_entry["query"]
       content = types.Content(role="user", parts=[types.Part(text=query)])
       turn_actual_tool_uses = []
+      
+      # Single list to store complete event history
+      event_history = []
 
       for event in runner.run(
           user_id=user_id, session_id=session_id, new_message=content
       ):
-        if event.is_final_response() and event.content and event.content.parts:
-          response = event.content.parts[0].text
-        elif event.get_function_calls():
+        # Store complete event history
+        event_data = {
+            # "timestamp": event.timestamp,
+            "author": event.author,
+            # "type": "response"  # default type
+        }
+        
+        # Capture function calls
+        if event.get_function_calls():
           for call in event.get_function_calls():
             turn_actual_tool_uses.append({
                 EvalConstants.TOOL_NAME: call.name,
                 EvalConstants.TOOL_INPUT: call.args,
             })
+            # event_data["type"] = "function_call"
+            event_data["function_call"] = {
+                "name": call.name,
+                "args": call.args
+            }
+        
+        # Capture function responses
+        if event.get_function_responses():
+          for resp in event.get_function_responses():
+            # event_data["type"] = "function_response"
+            event_data["function_response"] = {
+                "name": resp.name,
+                "response": resp.response
+            }
+        
+        # Capture all responses (intermediate and final)
+        if event.content and event.content.parts and event.content.parts[0].text:
+          response_text = event.content.parts[0].text
+          event_data["response"] = response_text
+          # event_data["is_final"] = event.is_final_response()
+          
+          # Keep existing behavior for final response
+          if event.is_final_response():
+            response = response_text
 
+        event_history.append(event_data)
+
+      # Keep existing fields for backward compatibility
       responses[index]["actual_tool_use"] = turn_actual_tool_uses
       responses[index]["response"] = response
-
+      
+      # Add complete event history
+      responses[index]["event_history"] = event_history
     return responses
 
   @staticmethod
